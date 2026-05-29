@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interview Agent — 通过面试认识自己</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+<!-- 顶栏 -->
+<div class="topbar">
+  <div class="brand">Interview&nbsp;Agent <span class="brand-sub">通过面试，认识自己</span></div>
+  <nav class="nav">
+    <button class="nav-btn" data-view="config">配置</button>
+    <button class="nav-btn" data-view="interview">面试</button>
+    <button class="nav-btn" data-view="review">复盘</button>
+    <button class="nav-btn" data-view="wiki" id="nav-wiki">Wiki</button>
+  </nav>
+</div>
+
+<!-- 配置屏 -->
+<section class="view" id="view-config">
+  <div class="panel-narrow">
+    <div class="section-label">Step 01 · 配置</div>
+    <h2>开始一场面试</h2>
+    <label class="field">
+      <span>岗位类型</span>
+      <input id="cfg-job" type="text" placeholder="如：后端开发工程师 / 产品经理 / 数据分析师" value="后端开发工程师">
+    </label>
+    <label class="field">
+      <span>面试风格</span>
+      <div class="seg" id="cfg-style">
+        <button class="seg-btn active" data-style="friendly">友善模式</button>
+        <button class="seg-btn" data-style="pressure">高压模式</button>
+      </div>
+    </label>
+    <label class="field">
+      <span>面试官人格（可选）</span>
+      <input id="cfg-persona" type="text" placeholder="如：严谨的技术专家 / 温和的 HR 总监">
+    </label>
+    <button class="primary-btn" id="btn-start">开始面试 →</button>
+  </div>
+</section>
+
+<!-- 面试屏 -->
+<section class="view" id="view-interview" hidden>
+  <div class="interview-layout">
+    <div class="chat-col">
+      <div class="chat-head">
+        <span id="iv-job-tag" class="tag-pill">面试中</span>
+        <div class="chat-actions">
+          <button class="ghost-btn" id="btn-switch">切换为高压模式</button>
+          <button class="danger-btn" id="btn-end">结束面试</button>
+        </div>
+      </div>
+      <div class="messages" id="iv-messages"></div>
+      <div class="composer">
+        <textarea id="iv-input" rows="2" placeholder="输入你的回答，Enter 发送 / Shift+Enter 换行"></textarea>
+        <button class="primary-btn" id="iv-send">发送</button>
+      </div>
+    </div>
+    <aside class="side-col">
+      <div class="side-block">
+        <div class="side-title mono-title">面试官 · 内心独白</div>
+        <div class="monologue" id="iv-monologue"><p class="muted">面试官的推理会实时显示在这里…</p></div>
+      </div>
+      <div class="side-block">
+        <div class="side-title scribe-title">观察者 · 实时记录</div>
+        <div class="observer" id="iv-observer"><p class="muted">观察者会在每轮回答后记录经历 / 能力信号 / 薄弱点…</p></div>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- 即时反馈卡 -->
+<section class="view" id="view-feedback" hidden>
+  <div class="panel-narrow">
+    <div class="section-label">Step 03 · 即时反馈</div>
+    <h2>本场面试点评</h2>
+    <div class="feedback-card" id="fb-content"></div>
+    <button class="primary-btn" id="btn-to-review">进入复盘对话 →</button>
+  </div>
+</section>
+
+<!-- 复盘屏 -->
+<section class="view" id="view-review" hidden>
+  <div class="chat-col solo">
+    <div class="chat-head">
+      <span class="tag-pill coach">复盘教练</span>
+      <button class="primary-btn small" id="btn-commit">整理并写入 Wiki</button>
+    </div>
+    <div class="messages" id="rv-messages"></div>
+    <div class="composer">
+      <textarea id="rv-input" rows="2" placeholder="和教练聊聊你的想法…"></textarea>
+      <button class="primary-btn" id="rv-send">发送</button>
+    </div>
+  </div>
+</section>
+
+<!-- Wiki 浏览屏 -->
+<section class="view" id="view-wiki" hidden>
+  <div class="wiki-layout">
+    <aside class="wiki-tree-col">
+      <div class="section-label">个人知识库</div>
+      <div class="wiki-meta" id="wiki-meta"></div>
+      <ul class="wiki-tree" id="wiki-tree"></ul>
+    </aside>
+    <div class="wiki-content" id="wiki-content">
+      <p class="muted">从左侧选择一个分区查看内容。</p>
+    </div>
+  </div>
+</section>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

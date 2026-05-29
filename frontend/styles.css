@@ -1,0 +1,146 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f5f4f0;
+  --ink: #1a1a1a;
+  --muted: #999;
+  --line: #e6e3dd;
+  --green: #4a7c59;
+  --plum: #7c4a6b;
+  --card: #fff;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  background: var(--bg);
+  color: #2c2c2c;
+  line-height: 1.7;
+}
+
+.mono { font-family: "SF Mono", "Fira Code", Consolas, monospace; }
+
+/* 顶栏 */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--ink); color: #fff;
+  padding: 14px 28px; position: sticky; top: 0; z-index: 10;
+}
+.brand { font-size: 18px; font-weight: 700; }
+.brand-sub { font-size: 12px; color: #999; font-weight: 400; margin-left: 10px; }
+.nav { display: flex; gap: 4px; }
+.nav-btn {
+  background: transparent; color: #bbb; border: none; cursor: pointer;
+  padding: 6px 14px; font-size: 14px; border-radius: 4px;
+}
+.nav-btn:hover { color: #fff; }
+.nav-btn.active { background: #333; color: #fff; }
+
+/* 视图通用 */
+.view { max-width: 1100px; margin: 0 auto; padding: 40px 28px 80px; }
+.panel-narrow { max-width: 640px; margin: 0 auto; }
+.section-label {
+  font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 10px;
+}
+h2 { font-size: 26px; margin-bottom: 24px; color: var(--ink); }
+.muted { color: var(--muted); font-size: 14px; }
+
+/* 配置表单 */
+.field { display: block; margin-bottom: 22px; }
+.field > span { display: block; font-size: 13px; color: #666; margin-bottom: 8px; }
+.field input {
+  width: 100%; padding: 12px 14px; border: 1px solid var(--line);
+  border-radius: 6px; font-size: 15px; background: #fff;
+}
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg-btn {
+  background: #fff; border: none; padding: 10px 22px; cursor: pointer; font-size: 14px; color: #666;
+}
+.seg-btn.active { background: var(--ink); color: #fff; }
+
+.primary-btn {
+  background: var(--ink); color: #fff; border: none; cursor: pointer;
+  padding: 12px 24px; border-radius: 6px; font-size: 15px; font-weight: 600;
+}
+.primary-btn:hover { background: #000; }
+.primary-btn.small { padding: 8px 16px; font-size: 13px; }
+.primary-btn:disabled { opacity: .5; cursor: not-allowed; }
+.ghost-btn {
+  background: #fff; border: 1px solid var(--line); border-radius: 6px;
+  padding: 8px 16px; cursor: pointer; font-size: 13px; color: #444;
+}
+.ghost-btn:hover { border-color: #aaa; }
+.danger-btn {
+  background: #fff; border: 1px solid #d9b8b8; color: #9c4a4a; border-radius: 6px;
+  padding: 8px 16px; cursor: pointer; font-size: 13px;
+}
+
+/* 面试布局 */
+.interview-layout { display: grid; grid-template-columns: 1fr 340px; gap: 20px; }
+.chat-col { display: flex; flex-direction: column; background: #fff; border-radius: 8px; min-height: 70vh; }
+.chat-col.solo { max-width: 760px; margin: 0 auto; }
+.chat-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid var(--line);
+}
+.chat-actions { display: flex; gap: 10px; }
+.tag-pill { font-size: 12px; background: #eee; color: #555; padding: 4px 12px; border-radius: 99px; }
+.tag-pill.coach { background: #f0e6ec; color: var(--plum); }
+
+.messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+.msg { max-width: 80%; padding: 12px 16px; border-radius: 12px; font-size: 15px; white-space: pre-wrap; }
+.msg.bot { background: #f2f0eb; align-self: flex-start; border-bottom-left-radius: 2px; }
+.msg.user { background: var(--ink); color: #fff; align-self: flex-end; border-bottom-right-radius: 2px; }
+.msg.coach { background: #f6eef3; align-self: flex-start; border-bottom-left-radius: 2px; }
+
+.composer { display: flex; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--line); }
+.composer textarea { flex: 1; resize: none; border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; font-size: 15px; font-family: inherit; }
+
+/* 侧栏 */
+.side-col { display: flex; flex-direction: column; gap: 16px; }
+.side-block { background: var(--ink); border-radius: 8px; padding: 16px; }
+.side-title { font-size: 12px; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px; }
+.mono-title { color: #8ab4d8; }
+.scribe-title { color: #a8d8a8; }
+.monologue { color: #cfcabf; font-size: 13px; max-height: 240px; overflow-y: auto; white-space: pre-wrap; font-style: italic; }
+.observer { max-height: 360px; overflow-y: auto; }
+.side-block .muted { color: #777; }
+
+.rec-group { margin-bottom: 14px; }
+.rec-group h4 { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+.rec-item { font-size: 13px; color: #ddd; padding: 5px 8px; background: #2a2a2a; border-radius: 4px; margin-bottom: 5px; border-left: 2px solid #555; }
+.rec-item.exp { border-left-color: var(--green); }
+.rec-item.sig { border-left-color: #8ab4d8; }
+.rec-item.weak { border-left-color: #c98a5a; }
+.rec-item.contra { border-left-color: #c95a5a; }
+.rec-item .lv { font-size: 11px; color: #999; }
+
+/* 反馈卡 */
+.feedback-card { background: #fff; border-radius: 8px; padding: 24px 28px; margin-bottom: 24px; white-space: pre-wrap; font-size: 15px; border-top: 3px solid var(--ink); }
+
+/* Wiki */
+.wiki-layout { display: grid; grid-template-columns: 260px 1fr; gap: 24px; }
+.wiki-meta { font-size: 13px; color: var(--green); margin-bottom: 14px; }
+.wiki-tree { list-style: none; background: var(--ink); border-radius: 8px; padding: 16px; font-family: "SF Mono", Consolas, monospace; }
+.wiki-tree li { padding: 7px 8px; color: #a8d8a8; font-size: 14px; cursor: pointer; border-radius: 4px; }
+.wiki-tree li:hover { background: #2a2a2a; }
+.wiki-tree li.active { background: #333; }
+.wiki-tree li.empty { color: #666; cursor: default; }
+.wiki-tree li.empty:hover { background: transparent; }
+.wiki-content { background: #fff; border-radius: 8px; padding: 28px 34px; min-height: 60vh; }
+.wiki-content h1, .wiki-content h2, .wiki-content h3 { color: var(--ink); margin: 18px 0 10px; }
+.wiki-content h1 { font-size: 22px; } .wiki-content h2 { font-size: 18px; } .wiki-content h3 { font-size: 15px; }
+.wiki-content p { margin-bottom: 10px; font-size: 15px; }
+.wiki-content ul { margin: 8px 0 12px 22px; } .wiki-content li { font-size: 15px; }
+.wiki-content code { background: #f2f0eb; padding: 1px 5px; border-radius: 3px; font-size: 13px; }
+.wiki-content hr { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
+
+/* toast */
+.toast {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+  background: var(--ink); color: #fff; padding: 12px 22px; border-radius: 8px; font-size: 14px; z-index: 100;
+}
+
+@media (max-width: 860px) {
+  .interview-layout, .wiki-layout { grid-template-columns: 1fr; }
+}
