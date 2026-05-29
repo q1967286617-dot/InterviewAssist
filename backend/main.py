@@ -1,13 +1,14 @@
 import json
+import re
 import uuid
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import agents, config, prompts, qwen_client, wiki
+from . import agents, config, prompts, wiki
 
 app = FastAPI(title="Interview Agent")
 
@@ -34,6 +35,11 @@ class SwitchReq(BaseModel):
 
 class SessionReq(BaseModel):
     session_id: str
+
+
+class QueryReq(BaseModel):
+    history: list[dict] = []
+    message: str
 
 
 # ---------- 工具 ----------
@@ -207,7 +213,27 @@ def review_message(req: MessageReq):
     return StreamingResponse(gen(), media_type="application/x-ndjson")
 
 
-# ---------- 写入 Wiki ----------
+# ---------- Wiki: 工具循环 agent 的活动事件转人话 ----------
+def _tool_activity(ev: dict) -> str | None:
+    """把一次工具调用翻成活动流里的一行人话;不需要展示的返回 None。"""
+    name, args = ev.get("name"), ev.get("args", {})
+    path = args.get("path", "")
+    if name == "read_page":
+        return f"读取 {path}"
+    if name == "write_page":
+        return f"写入 {path}"
+    if name == "delete_page":
+        return f"删除 {path}"
+    if name == "append_log":
+        return "更新 log.md"
+    if name == "search":
+        return f"检索「{args.get('query', '')}」"
+    if name == "list_files":
+        return "浏览全部页面"
+    return name
+
+
+# ---------- 写入 Wiki(Ingest agent) ----------
 @app.post("/api/wiki/commit")
 def wiki_commit(req: SessionReq):
     sess = SESSIONS.get(req.session_id)
@@ -216,29 +242,107 @@ def wiki_commit(req: SessionReq):
         if not sess:
             yield _jsonl({"type": "error", "text": "会话不存在"})
             return
-        raw = ""
+        nth = wiki.next_interview_number()
+        today = date.today().isoformat()
+        observer = _records_full_text(sess["observer"])
+        transcript = "\n".join(sess["review_transcript"]) or "(无复盘)"
+        # 先把原始源不可变落盘
+        source_id = f"interview-{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        source_doc = (
+            f"---\ntype: source\ninterview: {nth}\ndate: {today}\n---\n"
+            f"# 面试 #{nth} 原始记录 ({today})\n\n"
+            f"## 观察记录\n```json\n{observer}\n```\n\n## 复盘对话\n{transcript}\n"
+        )
+        wiki.save_source(source_id, source_doc)
+
+        source_text = (
+            f"观察记录(JSON):\n{observer}\n\n复盘对话:\n{transcript}\n\n"
+            f"(原始记录已存于 {config.SOURCES_DIR}/{source_id}.md)"
+        )
+        summary = ""
         try:
-            for delta in agents.synthesize_wiki_stream(
-                observer_record=_records_full_text(sess["observer"]),
-                review_transcript="\n".join(sess["review_transcript"]),
-                current_wiki=wiki.read_current_wiki(),
-                date=date.today().isoformat(),
-                nth=wiki.next_interview_number(),
-            ):
-                raw += delta
-                # 上报已生成字数,让前端展示进度(原始 JSON 不直接渲染)
-                yield _jsonl({"type": "progress", "chars": len(raw)})
+            for ev in agents.ingest_events(source_text, today, nth):
+                if ev["type"] == "tool":
+                    line = _tool_activity(ev)
+                    if line:
+                        yield _jsonl({"type": "activity", "text": line})
+                elif ev["type"] == "final":
+                    summary = ev["text"]
+                elif ev["type"] == "error":
+                    yield _jsonl({"type": "error", "text": ev["text"]})
+                    return
         except Exception as exc:
             yield _jsonl({"type": "error", "text": f"整理出错:{exc}"})
             return
-        synth = qwen_client.extract_json(raw)
-        if not synth:
-            yield _jsonl({"type": "error", "text": "整理失败,请重试"})
-            return
-        summary = wiki.write_wiki(synth)
-        yield _jsonl({"type": "done", "summary": summary, "tree": wiki.get_tree()})
+        wiki.bump_interview_count()
+        wiki.git_commit(f"面试#{nth}: {summary[:60] or '更新画像'}")
+        yield _jsonl(
+            {"type": "done", "summary": summary or "已更新个人 Wiki", "tree": wiki.get_tree()}
+        )
 
     return StreamingResponse(gen(), media_type="application/x-ndjson")
+
+
+# ---------- Query: 问答画像 ----------
+@app.post("/api/wiki/query")
+def wiki_query(req: QueryReq):
+    def gen():
+        reply = ""
+        try:
+            for ev in agents.query_events(req.history, req.message):
+                if ev["type"] == "tool":
+                    line = _tool_activity(ev)
+                    if line:
+                        yield _jsonl({"type": "activity", "text": line})
+                elif ev["type"] == "final":
+                    reply = ev["text"]
+                    yield _jsonl({"type": "reply", "text": reply})
+                elif ev["type"] == "error":
+                    yield _jsonl({"type": "error", "text": ev["text"]})
+                    return
+        except Exception as exc:
+            yield _jsonl({"type": "error", "text": f"问答出错:{exc}"})
+            return
+        yield _jsonl({"type": "done"})
+
+    return StreamingResponse(gen(), media_type="application/x-ndjson")
+
+
+# ---------- Lint: 体检 + 下场提纲 ----------
+@app.post("/api/wiki/lint")
+def wiki_lint():
+    def gen():
+        report = ""
+        try:
+            for ev in agents.lint_events():
+                if ev["type"] == "tool":
+                    line = _tool_activity(ev)
+                    if line:
+                        yield _jsonl({"type": "activity", "text": line})
+                elif ev["type"] == "final":
+                    report = ev["text"]
+                elif ev["type"] == "error":
+                    yield _jsonl({"type": "error", "text": ev["text"]})
+                    return
+        except Exception as exc:
+            yield _jsonl({"type": "error", "text": f"体检出错:{exc}"})
+            return
+        questions = _extract_next_questions(report)
+        yield _jsonl({"type": "report", "text": report, "questions": questions})
+        yield _jsonl({"type": "done"})
+
+    return StreamingResponse(gen(), media_type="application/x-ndjson")
+
+
+def _extract_next_questions(report: str) -> list[str]:
+    """从 lint 报告末尾的 fenced json 里取出 next_questions。"""
+    m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", report or "", re.DOTALL)
+    if not m:
+        return []
+    try:
+        return list(json.loads(m.group(1)).get("next_questions", []))[:5]
+    except json.JSONDecodeError:
+        return []
 
 
 @app.get("/api/wiki/tree")

@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Iterator
+from typing import Callable, Iterator
 
 from openai import OpenAI
 
@@ -43,6 +43,79 @@ def chat(messages: list[dict], temperature: float = 0.7) -> str:
         temperature=temperature,
     )
     return resp.choices[0].message.content or ""
+
+
+def tool_loop(
+    messages: list[dict],
+    tools: list[dict],
+    handlers: dict[str, Callable[[dict], str]],
+    model: str | None = None,
+    temperature: float = 0.4,
+    max_iters: int = 24,
+) -> Iterator[dict]:
+    """运行一个 function-calling 工具循环,产出事件供上层流式展示。
+
+    事件类型:
+      {"type": "tool", "name", "args", "result"}  每次工具调用及其结果
+      {"type": "final", "text"}                    模型不再调用工具时的收尾文本
+      {"type": "error", "text"}                    出错
+
+    handlers: 工具名 -> 处理函数(接收参数 dict,返回字符串结果)。
+    """
+    client = get_client()
+    model = model or config.AGENT_MODEL
+    convo = list(messages)
+    for _ in range(max_iters):
+        resp = client.chat.completions.create(
+            model=model,
+            messages=convo,
+            tools=tools,
+            temperature=temperature,
+        )
+        msg = resp.choices[0].message
+        calls = msg.tool_calls or []
+        # 把助手这一轮(可能含 tool_calls)原样加入对话
+        convo.append(
+            {
+                "role": "assistant",
+                "content": msg.content or "",
+                "tool_calls": [
+                    {
+                        "id": c.id,
+                        "type": "function",
+                        "function": {
+                            "name": c.function.name,
+                            "arguments": c.function.arguments,
+                        },
+                    }
+                    for c in calls
+                ],
+            }
+            if calls
+            else {"role": "assistant", "content": msg.content or ""}
+        )
+        if not calls:
+            yield {"type": "final", "text": msg.content or ""}
+            return
+        for c in calls:
+            name = c.function.name
+            try:
+                args = json.loads(c.function.arguments or "{}")
+            except json.JSONDecodeError:
+                args = {}
+            handler = handlers.get(name)
+            if handler is None:
+                result = f"(未知工具: {name})"
+            else:
+                try:
+                    result = handler(args)
+                except Exception as e:  # 工具内部异常也回喂模型,让它自愈
+                    result = f"(工具 {name} 执行出错: {e})"
+            yield {"type": "tool", "name": name, "args": args, "result": result}
+            convo.append(
+                {"role": "tool", "tool_call_id": c.id, "content": str(result)}
+            )
+    yield {"type": "error", "text": f"达到最大工具调用轮数({max_iters})上限"}
 
 
 def chat_json(messages: list[dict], temperature: float = 0.3) -> dict:

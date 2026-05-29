@@ -134,6 +134,43 @@ h2 { font-size: 26px; margin-bottom: 24px; color: var(--ink); }
 .wiki-content ul { margin: 8px 0 12px 22px; } .wiki-content li { font-size: 15px; }
 .wiki-content code { background: #f2f0eb; padding: 1px 5px; border-radius: 3px; font-size: 13px; }
 .wiki-content hr { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
+.wiki-content pre { background: #f2f0eb; padding: 12px 14px; border-radius: 6px; overflow-x: auto; margin: 10px 0; }
+.wiki-content pre code { background: none; padding: 0; font-size: 12px; }
+.wikilink { color: var(--green); border-bottom: 1px dashed var(--green); cursor: pointer; }
+.wikilink:hover { background: #eef5ef; }
+
+/* wiki 操作区 / 树 */
+.wiki-actions { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.wiki-actions .ghost-btn { width: 100%; text-align: left; }
+.wiki-tree li.wt-dir { color: #6fae6f; font-weight: 600; cursor: default; margin-top: 6px; text-transform: uppercase; font-size: 12px; letter-spacing: .5px; }
+.wiki-tree li.wt-dir:hover { background: transparent; }
+.wiki-tree li.wt-file { padding-left: 18px; }
+
+/* wiki 右栏:页面 / 问答 / 体检 共用容器 */
+.wiki-main { min-height: 60vh; }
+.wiki-pane { background: #fff; border-radius: 8px; min-height: 60vh; display: flex; flex-direction: column; overflow: hidden; }
+.pane-head { padding: 16px 22px; border-bottom: 1px solid var(--line); font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+.x-btn { background: none; border: none; font-size: 22px; line-height: 1; cursor: pointer; color: #999; }
+.x-btn:hover { color: var(--ink); }
+
+/* 活动流 */
+.activity, .lint-activity { font-family: "SF Mono", Consolas, monospace; font-size: 13px; color: #777; margin-top: 12px; max-height: 320px; overflow-y: auto; }
+.act-line { padding: 3px 0; border-bottom: 1px dotted var(--line); }
+
+/* 问答面板 */
+#wiki-query .messages { min-height: 40vh; }
+.msg.coach.thinking { color: #999; font-style: italic; }
+
+/* 体检报告 */
+.lint-report { padding: 20px 24px; overflow-y: auto; }
+.lint-report h1, .lint-report h2, .lint-report h3 { color: var(--ink); margin: 16px 0 8px; }
+.lint-report h2 { font-size: 17px; } .lint-report h3 { font-size: 14px; }
+.lint-report p, .lint-report li { font-size: 14px; }
+.lint-report ul { margin: 6px 0 10px 20px; }
+.lint-questions { margin: 4px 24px 24px; padding: 16px 18px; background: #f6eef3; border-radius: 8px; }
+.lint-questions h4 { margin-bottom: 10px; }
+.lint-questions ul { margin: 0 0 14px 20px; }
+.lint-questions li { font-size: 14px; margin-bottom: 6px; }
 
 /* toast */
 .toast {

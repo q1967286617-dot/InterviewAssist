@@ -227,62 +227,133 @@ $("#btn-commit").addEventListener("click", async () => {
   const btn = $("#btn-commit");
   btn.disabled = true;
   btn.textContent = "整理中…";
-  let errored = false;
-  let summary = "";
+  showView("wiki");
+  showWikiPane("content");
+  const box = $("#wiki-content");
+  box.innerHTML = '<h2>正在整理画像…</h2><div class="activity" id="ingest-activity"></div>';
+  const act = $("#ingest-activity");
+  let errored = false, summary = "";
   try {
     await streamPost("/api/wiki/commit", { session_id: state.sessionId }, (o) => {
-      if (o.type === "progress") { btn.textContent = `整理中…（${o.chars} 字）`; }
-      else if (o.type === "error") { errored = true; toast(o.text); }
+      if (o.type === "activity") { appendActivity(act, o.text); }
+      else if (o.type === "error") { errored = true; appendActivity(act, "⚠ " + o.text); }
       else if (o.type === "done") { summary = o.summary; }
     });
-  } catch (e) {
-    errored = true;
-    toast("整理失败,请重试");
-  }
+  } catch (e) { errored = true; toast("整理失败,请重试"); }
   btn.disabled = false;
   btn.textContent = "整理并写入 Wiki";
-  if (errored) return;
-  toast(summary || "已写入 Wiki");
-  showView("wiki");
+  if (!errored) {
+    appendActivity(act, "✓ " + (summary || "已写入 Wiki"));
+    toast(summary || "已写入 Wiki");
+  }
+  await loadWiki();
 });
 
+function appendActivity(container, text) {
+  const d = document.createElement("div");
+  d.className = "act-line";
+  d.textContent = text;
+  container.appendChild(d);
+  container.scrollTop = container.scrollHeight;
+}
+
 // ================= Wiki 屏 =================
+const wikiPanes = ["content", "query", "lint"];
+function showWikiPane(name) {
+  $("#wiki-content").hidden = name !== "content";
+  $("#wiki-query").hidden = name !== "query";
+  $("#wiki-lint").hidden = name !== "lint";
+}
+
 async function loadWiki() {
   const r = await fetch("/api/wiki/tree");
   const data = await r.json();
   $("#wiki-meta").textContent = `已积累 ${data.interviews} 次面试`;
   const ul = $("#wiki-tree");
   ul.innerHTML = "";
-  data.tree.forEach((node) => {
+  state.wikiFiles = [];
+
+  const fileLi = (node) => {
     const li = document.createElement("li");
-    li.textContent = (node.type === "empty" ? "○ " : "› ") + node.label;
-    if (node.type === "empty") { li.classList.add("empty"); }
-    else {
-      li.addEventListener("click", () => {
-        ul.querySelectorAll("li").forEach((x) => x.classList.remove("active"));
-        li.classList.add("active");
-        openWikiFile(node.path);
-      });
+    li.className = "wt-file";
+    li.textContent = "› " + node.label;
+    li.addEventListener("click", () => {
+      ul.querySelectorAll("li").forEach((x) => x.classList.remove("active"));
+      li.classList.add("active");
+      openWikiFile(node.path);
+    });
+    state.wikiFiles.push({ label: node.label, path: node.path });
+    return li;
+  };
+
+  data.tree.forEach((node) => {
+    if (node.type === "dir") {
+      const head = document.createElement("li");
+      head.className = "wt-dir";
+      head.textContent = node.label + ` (${(node.children || []).length})`;
+      ul.appendChild(head);
+      (node.children || []).forEach((c) => ul.appendChild(fileLi(c)));
+    } else {
+      ul.appendChild(fileLi(node));
     }
-    ul.appendChild(li);
   });
 }
 
 async function openWikiFile(path) {
+  showWikiPane("content");
   const r = await fetch("/api/wiki/file?path=" + encodeURIComponent(path));
   const data = await r.json();
-  $("#wiki-content").innerHTML = renderMarkdown(data.content || "（暂无内容）");
+  $("#wiki-content").innerHTML = renderMarkdown(stripFrontmatter(data.content || "（暂无内容）"));
 }
 
-// 极简 markdown 渲染(标题/列表/粗体/代码/分隔线)
+function stripFrontmatter(md) {
+  const m = md.match(/^---\s*\n[\s\S]*?\n---\s*\n?/);
+  return m ? md.slice(m[0].length) : md;
+}
+
+// 解析 [[标题]] 互链:在已知文件里找匹配的页面,点击跳转
+function resolveWikiLink(title) {
+  const files = state.wikiFiles || [];
+  const t = title.trim().toLowerCase();
+  return (
+    files.find((f) => f.label.toLowerCase() === t) ||
+    files.find((f) => f.label.toLowerCase().includes(t) || t.includes(f.label.toLowerCase()))
+  );
+}
+
+// 点击渲染区里的 [[链接]]
+document.addEventListener("click", (e) => {
+  const a = e.target.closest(".wikilink");
+  if (!a) return;
+  const hit = resolveWikiLink(a.dataset.link);
+  if (hit) {
+    const ul = $("#wiki-tree");
+    ul.querySelectorAll("li").forEach((x) => x.classList.remove("active"));
+    openWikiFile(hit.path);
+  } else {
+    toast("还没有「" + a.dataset.link + "」这一页");
+  }
+});
+
+// 极简 markdown 渲染(标题/列表/粗体/代码/分隔线/[[互链]])
 function renderMarkdown(md) {
   const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const inline = (line) =>
+    line
+      .replace(/\[\[(.+?)\]\]/g, (_, t) => `<a class="wikilink" data-link="${t}">${t}</a>`)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/`(.+?)`/g, "<code>$1</code>");
   const lines = md.split("\n");
-  let html = "", inList = false;
+  let html = "", inList = false, inCode = false, code = "";
   const closeList = () => { if (inList) { html += "</ul>"; inList = false; } };
   for (let raw of lines) {
-    let line = esc(raw);
-    line = line.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/`(.+?)`/g, "<code>$1</code>");
+    if (/^```/.test(raw)) {
+      if (inCode) { html += "<pre><code>" + esc(code) + "</code></pre>"; code = ""; inCode = false; }
+      else { closeList(); inCode = true; }
+      continue;
+    }
+    if (inCode) { code += raw + "\n"; continue; }
+    let line = inline(esc(raw));
     if (/^###\s+/.test(raw)) { closeList(); html += "<h3>" + line.replace(/^###\s+/, "") + "</h3>"; }
     else if (/^##\s+/.test(raw)) { closeList(); html += "<h2>" + line.replace(/^##\s+/, "") + "</h2>"; }
     else if (/^#\s+/.test(raw)) { closeList(); html += "<h1>" + line.replace(/^#\s+/, "") + "</h1>"; }
@@ -291,8 +362,88 @@ function renderMarkdown(md) {
     else if (raw.trim() === "") { closeList(); }
     else { closeList(); html += "<p>" + line + "</p>"; }
   }
+  if (inCode) html += "<pre><code>" + esc(code) + "</code></pre>";
   closeList();
   return html;
 }
+
+// ---- Query: 问问画像 ----
+state.queryHistory = [];
+$("#btn-query").addEventListener("click", () => showWikiPane("query"));
+document.querySelectorAll("[data-close]").forEach((b) =>
+  b.addEventListener("click", () => showWikiPane("content"))
+);
+
+async function sendQuery() {
+  const input = $("#q-input");
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  appendMsg("q-messages", "user", text);
+  const bot = appendMsg("q-messages", "coach", "");
+  bot.classList.add("thinking");
+  bot.textContent = "查阅画像中…";
+  let reply = "";
+  try {
+    await streamPost("/api/wiki/query", { history: state.queryHistory, message: text }, (o) => {
+      if (o.type === "activity") { bot.textContent = "· " + o.text; }
+      else if (o.type === "reply") { reply = o.text; bot.classList.remove("thinking"); bot.innerHTML = renderMarkdown(reply); scrollChat("q-messages"); }
+      else if (o.type === "error") { bot.classList.remove("thinking"); bot.textContent = "（" + o.text + "）"; }
+    });
+  } catch (e) { bot.classList.remove("thinking"); bot.textContent = "（连接中断）"; }
+  if (reply) {
+    state.queryHistory.push({ role: "user", content: text });
+    state.queryHistory.push({ role: "assistant", content: reply });
+  }
+}
+$("#q-send").addEventListener("click", sendQuery);
+$("#q-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendQuery(); }
+});
+
+// ---- Lint: 体检 + 下场提纲 ----
+$("#btn-lint").addEventListener("click", async () => {
+  showWikiPane("lint");
+  const act = $("#lint-activity");
+  const rep = $("#lint-report");
+  const qWrap = $("#lint-questions");
+  act.innerHTML = "";
+  rep.innerHTML = "";
+  qWrap.hidden = true;
+  let report = "", questions = [];
+  try {
+    await streamPost("/api/wiki/lint", {}, (o) => {
+      if (o.type === "activity") { appendActivity(act, o.text); }
+      else if (o.type === "report") { report = o.text; questions = o.questions || []; }
+      else if (o.type === "error") { appendActivity(act, "⚠ " + o.text); }
+    });
+  } catch (e) { appendActivity(act, "⚠ 体检失败"); }
+  if (report) {
+    act.innerHTML = "";
+    // 报告里末尾的 json 代码块不展示
+    rep.innerHTML = renderMarkdown(report.replace(/```(?:json)?\s*\{[\s\S]*?\}\s*```/g, ""));
+  }
+  if (questions.length) {
+    const list = $("#lint-q-list");
+    list.innerHTML = "";
+    questions.forEach((q) => {
+      const li = document.createElement("li");
+      li.textContent = q;
+      list.appendChild(li);
+    });
+    state.nextQuestions = questions;
+    qWrap.hidden = false;
+  }
+});
+
+$("#btn-use-questions").addEventListener("click", () => {
+  const qs = state.nextQuestions || [];
+  if (qs.length) {
+    $("#cfg-persona").value =
+      "本场请重点追问以下方向(基于上次画像体检):\n" + qs.map((q, i) => `${i + 1}. ${q}`).join("\n");
+  }
+  showView("config");
+  toast("已把体检提纲带入新面试配置");
+});
 
 showView("config");

@@ -104,10 +104,37 @@
     <aside class="wiki-tree-col">
       <div class="section-label">个人知识库</div>
       <div class="wiki-meta" id="wiki-meta"></div>
+      <div class="wiki-actions">
+        <button class="ghost-btn" id="btn-query">🔍 问问画像</button>
+        <button class="ghost-btn" id="btn-lint">🩺 体检 · 下场提纲</button>
+      </div>
       <ul class="wiki-tree" id="wiki-tree"></ul>
     </aside>
-    <div class="wiki-content" id="wiki-content">
-      <p class="muted">从左侧选择一个分区查看内容。</p>
+    <div class="wiki-main">
+      <!-- 页面浏览 -->
+      <div class="wiki-content" id="wiki-content">
+        <p class="muted">从左侧选择一个页面查看，或试试「问问画像 / 体检」。</p>
+      </div>
+      <!-- Query 问答面板 -->
+      <div class="wiki-pane" id="wiki-query" hidden>
+        <div class="pane-head">🔍 问问你的画像 <button class="x-btn" data-close="wiki-query">×</button></div>
+        <div class="messages" id="q-messages"></div>
+        <div class="composer">
+          <textarea id="q-input" rows="2" placeholder="如：我有哪些证据支撑领导力？我反复回避什么？"></textarea>
+          <button class="primary-btn" id="q-send">发送</button>
+        </div>
+      </div>
+      <!-- Lint 体检面板 -->
+      <div class="wiki-pane" id="wiki-lint" hidden>
+        <div class="pane-head">🩺 画像体检 · 下场面试提纲 <button class="x-btn" data-close="wiki-lint">×</button></div>
+        <div class="lint-activity" id="lint-activity"></div>
+        <div class="lint-report" id="lint-report"></div>
+        <div class="lint-questions" id="lint-questions" hidden>
+          <h4>下次面试官应聚焦的问题</h4>
+          <ul id="lint-q-list"></ul>
+          <button class="primary-btn" id="btn-use-questions">带着这些问题开始新面试 →</button>
+        </div>
+      </div>
     </div>
   </div>
 </section>

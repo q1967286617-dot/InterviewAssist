@@ -1,8 +1,8 @@
-"""三个 agent 的调用逻辑。"""
+"""面试三 agent + Wiki 维护三 agent 的调用逻辑。"""
 import json
 from typing import Iterator
 
-from . import prompts, qwen_client
+from . import config, prompts, qwen_client, wiki
 
 MONO_MARK = "[独白]"
 REPLY_MARK = "[回复]"
@@ -94,26 +94,96 @@ def coach_stream(
     yield from qwen_client.stream_chat(msgs, temperature=0.75)
 
 
-def _synthesize_messages(
-    observer_record: str, review_transcript: str, current_wiki: dict, date: str, nth: int
-) -> list[dict]:
-    user = (
-        f"今天日期:{date},这是第 {nth} 次面试。\n\n"
-        f"本场观察记录:\n{observer_record}\n\n"
-        f"复盘对话:\n{review_transcript or '(无)'}\n\n"
-        f"现有 Wiki 各分区内容:\n{json.dumps(current_wiki, ensure_ascii=False, indent=2)}"
-    )
-    return [
-        {"role": "system", "content": prompts.SYNTHESIZER_SYSTEM},
-        {"role": "user", "content": user},
+# ============ Wiki 维护 agent(工具循环) ============
+
+def _def(name: str, desc: str, props: dict, required: list[str]) -> dict:
+    return {
+        "type": "function",
+        "function": {
+            "name": name,
+            "description": desc,
+            "parameters": {"type": "object", "properties": props, "required": required},
+        },
+    }
+
+
+_STR = {"type": "string"}
+
+_READ_TOOLS = [
+    _def("read_page", "读取一个 wiki 页面的完整内容(含 frontmatter)。", {"path": _STR}, ["path"]),
+    _def("list_files", "列出 wiki 中全部页面的相对路径。", {}, []),
+    _def("search", "对全部页面做全文检索,返回相关页路径与片段。", {"query": _STR}, ["query"]),
+]
+_WRITE_TOOLS = [
+    _def(
+        "write_page",
+        "写入(整文件覆盖)一个 wiki 页面,需写完整内容含 frontmatter。",
+        {"path": _STR, "content": _STR},
+        ["path", "content"],
+    ),
+    _def("delete_page", "删除一个 wiki 页面(用于合并重复页)。", {"path": _STR}, ["path"]),
+    _def("append_log", "向 log.md 追加一条记录。", {"line": _STR}, ["line"]),
+]
+
+
+def _read_handlers() -> dict:
+    return {
+        "read_page": lambda a: wiki.read_page(a.get("path", "")),
+        "list_files": lambda a: "\n".join(wiki.list_files()) or "(空)",
+        "search": lambda a: json.dumps(
+            wiki.search(a.get("query", "")), ensure_ascii=False
+        ),
+    }
+
+
+def _write_handlers() -> dict:
+    return {
+        "write_page": lambda a: wiki.write_page(a.get("path", ""), a.get("content", "")),
+        "delete_page": lambda a: wiki.delete_page(a.get("path", "")),
+        "append_log": lambda a: wiki.append_log(a.get("line", "")),
+    }
+
+
+def _schema_text() -> str:
+    txt = wiki.read_page(config.SCHEMA_FILE)
+    return txt if "页面不存在" not in txt else "(规约文件缺失)"
+
+
+def ingest_events(source_text: str, date: str, nth: int) -> Iterator[dict]:
+    """Ingest:把一场面试的源整合进 Wiki。产出工具循环事件。"""
+    wiki.ensure_dirs()
+    messages = [
+        {"role": "system", "content": prompts.INGEST_SYSTEM.format(schema=_schema_text())},
+        {
+            "role": "user",
+            "content": prompts.INGEST_USER.format(date=date, nth=nth, source=source_text),
+        },
     ]
+    tools = _READ_TOOLS + _WRITE_TOOLS
+    handlers = {**_read_handlers(), **_write_handlers()}
+    yield from qwen_client.tool_loop(messages, tools, handlers, temperature=0.4)
 
 
-def synthesize_wiki_stream(
-    observer_record: str, review_transcript: str, current_wiki: dict, date: str, nth: int
-) -> Iterator[str]:
-    """流式产出合成 Wiki 的原始文本(JSON),由调用方累积后解析。"""
-    msgs = _synthesize_messages(
-        observer_record, review_transcript, current_wiki, date, nth
+def query_events(history: list[dict], question: str) -> Iterator[dict]:
+    """Query:对画像提问。history 为既往 {role,content} 列表(不含 system)。"""
+    wiki.ensure_dirs()
+    messages = (
+        [{"role": "system", "content": prompts.QUERY_SYSTEM.format(schema=_schema_text())}]
+        + history
+        + [{"role": "user", "content": question}]
     )
-    yield from qwen_client.stream_chat(msgs, temperature=0.5)
+    tools = _READ_TOOLS + _WRITE_TOOLS  # 可写,但 prompt 限定只写 answers/
+    handlers = {**_read_handlers(), **_write_handlers()}
+    yield from qwen_client.tool_loop(messages, tools, handlers, temperature=0.5)
+
+
+def lint_events() -> Iterator[dict]:
+    """Lint:体检并产出下场面试提纲。只读。"""
+    wiki.ensure_dirs()
+    messages = [
+        {"role": "system", "content": prompts.LINT_SYSTEM.format(schema=_schema_text())},
+        {"role": "user", "content": "请对我的画像做一次体检,并给出下一场面试的提纲。"},
+    ]
+    yield from qwen_client.tool_loop(
+        messages, _READ_TOOLS, _read_handlers(), temperature=0.4
+    )
